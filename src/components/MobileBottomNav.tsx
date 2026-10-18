@@ -5,12 +5,12 @@ import {
   MessageSquare,
   CalendarCheck,
   Database,
-  Calendar as CalendarIcon,
 } from 'lucide-react';
+import { AppTab } from './Header';
 
 interface MobileBottomNavProps {
-  activeTab: 'roster' | 'tasks' | 'sync' | 'firebase' | 'line' | 'desk-calendar';
-  setActiveTab: (tab: 'roster' | 'tasks' | 'sync' | 'firebase' | 'line' | 'desk-calendar') => void;
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   shiftsCount: number;
   lineConfigured: boolean;
 }
@@ -113,26 +113,22 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           </span>
         </button>
 
-        {/* Tab 5: ซิงค์ & คลาวด์ */}
+        {/* Tab 5: ฐานข้อมูล Google Sheets */}
         <button
-          onClick={() => setActiveTab(activeTab === 'firebase' ? 'firebase' : 'sync')}
+          onClick={() => setActiveTab('sheets-db')}
           className={`flex flex-col items-center justify-center w-full py-1 rounded-xl transition-all active:scale-90 ${
-            activeTab === 'sync' || activeTab === 'firebase'
-              ? 'text-white'
-              : 'text-neutral-400 hover:text-neutral-200'
+            activeTab === 'sheets-db' ? 'text-white' : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
           <div
             className={`p-1 rounded-lg transition-colors ${
-              activeTab === 'sync' || activeTab === 'firebase'
-                ? 'bg-amber-500/20 text-amber-400'
-                : ''
+              activeTab === 'sheets-db' ? 'bg-emerald-500/20 text-emerald-400' : ''
             }`}
           >
             <Database className="w-5 h-5" />
           </div>
           <span className="text-[10px] font-medium tracking-tight mt-0.5 truncate max-w-[62px]">
-            ซิงค์/คลาวด์
+            ฐานข้อมูล
           </span>
         </button>
       </div>

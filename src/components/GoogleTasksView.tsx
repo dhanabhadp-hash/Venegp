@@ -23,12 +23,13 @@ import {
   toggleTaskComplete,
   deleteGoogleTask,
 } from '../services/googleWorkspace';
+import { downloadICalendarFile } from '../services/googleSheetsDb';
 import confetti from 'canvas-confetti';
 
 interface GoogleTasksViewProps {
   shifts: DutyShift[];
-  token: string | null;
-  onRequireAuth: () => void;
+  token?: string | null;
+  onRequireAuth?: () => void;
 }
 
 export const GoogleTasksView: React.FC<GoogleTasksViewProps> = ({
@@ -40,6 +41,14 @@ export const GoogleTasksView: React.FC<GoogleTasksViewProps> = ({
   const [selectedListId, setSelectedListId] = useState<string>('');
   const [tasks, setTasks] = useState<GoogleTaskItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [localCompletedMap, setLocalCompletedMap] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem('duty_completed_tasks_map');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
 
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -200,21 +209,187 @@ export const GoogleTasksView: React.FC<GoogleTasksViewProps> = ({
   const completedCount = tasks.filter(t => t.status === 'completed').length;
 
   if (!token) {
+    const localFilteredShifts = shifts.filter(s => {
+      const isDone = Boolean(localCompletedMap[s.id]);
+      if (filter === 'pending') return !isDone;
+      if (filter === 'completed') return isDone;
+      return true;
+    });
+
+    const localDoneCount = shifts.filter(s => localCompletedMap[s.id]).length;
+    const localPendingCount = shifts.length - localDoneCount;
+
+    const toggleLocalDone = (shiftId: string) => {
+      const updated = { ...localCompletedMap, [shiftId]: !localCompletedMap[shiftId] };
+      setLocalCompletedMap(updated);
+      localStorage.setItem('duty_completed_tasks_map', JSON.stringify(updated));
+      if (!localCompletedMap[shiftId]) {
+        confetti({ particleCount: 30, spread: 40 });
+      }
+    };
+
     return (
-      <div className="bg-[#121214] border border-neutral-800 rounded-lg p-8 text-center max-w-2xl mx-auto space-y-4">
-        <div className="w-12 h-12 rounded-xl bg-white text-black mx-auto flex items-center justify-center font-bold">
-          <CheckSquare className="w-6 h-6" />
+      <div className="space-y-6">
+        {/* Top Banner */}
+        <div className="bg-[#121214] border border-neutral-800 rounded-lg p-5 sm:p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-400">
+                  DUTY TASKS & CHECKLIST
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">
+                  โหมดเดี่ยว (Single User Active)
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-tight">
+                รายการงานการอยู่เวรปฏิบัติการ (Interactive Tasks)
+              </h2>
+              <p className="text-xs text-neutral-400 mt-1">
+                ติดตามสถานะเวรปฏิบัติการ ติ๊กบันทึกงานที่เสร็จสิ้น และส่งออกปฏิทิน Google Calendar / iCalendar ได้ทันที
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={() => downloadICalendarFile(shifts)}
+                className="flex items-center gap-2 bg-white text-black hover:bg-neutral-200 px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-colors font-mono"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                ส่งออก Google Calendar (.ics)
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-12 gap-3 mt-5 pt-4 border-t border-neutral-800/80">
+            <div className="col-span-4 bg-[#18181B] p-3 rounded-lg border border-neutral-800">
+              <div className="text-[10px] font-mono text-neutral-400">ภารกิจทั้งหมด</div>
+              <div className="text-lg font-bold font-mono text-white mt-0.5">{shifts.length} เวร</div>
+            </div>
+            <div className="col-span-4 bg-[#18181B] p-3 rounded-lg border border-neutral-800">
+              <div className="text-[10px] font-mono text-amber-400">รอดำเนินการ</div>
+              <div className="text-lg font-bold font-mono text-amber-400 mt-0.5">{localPendingCount} เวร</div>
+            </div>
+            <div className="col-span-4 bg-[#18181B] p-3 rounded-lg border border-neutral-800">
+              <div className="text-[10px] font-mono text-emerald-400">ปฏิบัติงานแล้ว</div>
+              <div className="text-lg font-bold font-mono text-emerald-400 mt-0.5">{localDoneCount} เวร</div>
+            </div>
+          </div>
         </div>
-        <h3 className="text-lg font-bold text-white">เชื่อมต่อกับ Google Tasks</h3>
-        <p className="text-xs text-neutral-400 max-w-md mx-auto leading-relaxed">
-          เข้าถึงรายการภารกิจใน Google Tasks ของคุณ เพื่อซิงค์ตารางเวร จัดการสิ่งที่ต้องทำ และติดตามสถานะการอยู่เวรของเจ้าหน้าที่แบบเรียลไทม์
-        </p>
-        <button
-          onClick={onRequireAuth}
-          className="inline-flex items-center gap-2 bg-white text-black hover:bg-neutral-200 font-semibold px-5 py-2.5 rounded-lg text-xs tracking-wide transition-colors"
-        >
-          ลงชื่อเข้าใช้ Google เพื่อใช้งาน Tasks
-        </button>
+
+        {/* Filter bar */}
+        <div className="bg-[#121214] border border-neutral-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-3 py-1.5 rounded-md transition-colors ${
+                filter === 'all' ? 'bg-neutral-800 text-white font-bold' : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              ทั้งหมด ({shifts.length})
+            </button>
+            <button
+              onClick={() => setFilter('pending')}
+              className={`px-3 py-1.5 rounded-md transition-colors ${
+                filter === 'pending' ? 'bg-amber-950/60 text-amber-300 font-bold' : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              รอดำเนินการ ({localPendingCount})
+            </button>
+            <button
+              onClick={() => setFilter('completed')}
+              className={`px-3 py-1.5 rounded-md transition-colors ${
+                filter === 'completed' ? 'bg-emerald-950/60 text-emerald-300 font-bold' : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              ปฏิบัติงานแล้ว ({localDoneCount})
+            </button>
+          </div>
+
+          <div className="text-neutral-500 text-[11px]">
+            คลิกที่ช่องหน้าภารกิจเพื่อเปลี่ยนสถานะ
+          </div>
+        </div>
+
+        {/* Task List Items */}
+        <div className="space-y-2">
+          {localFilteredShifts.length === 0 ? (
+            <div className="p-8 text-center bg-[#121214] border border-neutral-800 rounded-lg text-neutral-400 text-xs font-mono">
+              ไม่พบภารกิจตามตัวกรองที่เลือก
+            </div>
+          ) : (
+            localFilteredShifts.map(s => {
+              const isDone = Boolean(localCompletedMap[s.id]);
+              return (
+                <div
+                  key={s.id}
+                  className={`bg-[#121214] border rounded-lg p-3.5 transition-all flex items-center justify-between gap-3 ${
+                    isDone
+                      ? 'border-neutral-800/60 opacity-60 bg-[#121214]/60'
+                      : 'border-neutral-800 hover:border-neutral-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      onClick={() => toggleLocalDone(s.id)}
+                      className="p-1 text-neutral-400 hover:text-white transition-colors shrink-0"
+                    >
+                      {isDone ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      ) : (
+                        <Square className="w-5 h-5 text-neutral-500" />
+                      )}
+                    </button>
+
+                    <div className="min-w-0">
+                      <div
+                        className={`text-sm font-semibold truncate ${
+                          isDone ? 'line-through text-neutral-400' : 'text-white'
+                        }`}
+                      >
+                        เวร{s.shiftName} - {s.staffName}
+                      </div>
+                      <div className="text-[11px] font-mono text-neutral-400 flex flex-wrap items-center gap-2 mt-0.5">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-neutral-500" />
+                          {s.date}
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-neutral-500" />
+                          {s.startTime} - {s.endTime} น.
+                        </span>
+                        <span>•</span>
+                        <span>{s.department}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-2">
+                    <a
+                      href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
+                        `เวร${s.shiftName} - ${s.staffName}`
+                      )}&dates=${s.date.replace(/-/g, '')}T${s.startTime.replace(':', '')}00/${s.date.replace(
+                        /-/g,
+                        ''
+                      )}T${s.endTime.replace(':', '')}00&details=${encodeURIComponent(
+                        `เจ้าหน้าที่: ${s.staffName}\nแผนก: ${s.department}\nหมายเหตุ: ${s.notes || ''}`
+                      )}&location=${encodeURIComponent(s.location || 'ห้องยาและคลังยา รพ.สบปราบ')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-mono text-neutral-400 hover:text-white border border-neutral-800 hover:border-neutral-700 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                      title="เพิ่มเวรนี้ลงใน Google Calendar ทันที"
+                    >
+                      <ExternalLink className="w-3 h-3 text-neutral-400" />
+                      <span className="hidden sm:inline">Google Calendar</span>
+                    </a>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
     );
   }

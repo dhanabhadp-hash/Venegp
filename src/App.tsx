@@ -4,17 +4,22 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { User } from 'firebase/auth';
-import { Header } from './components/Header';
+import { Header, AppTab } from './components/Header';
 import { SheetImporter } from './components/SheetImporter';
 import { RosterAnalyzer } from './components/RosterAnalyzer';
 import { WorkspaceSyncModal } from './components/WorkspaceSyncModal';
 import { LineNotifier } from './components/LineNotifier';
 import { DeskCalendarView } from './components/DeskCalendarView';
 import { GoogleTasksView } from './components/GoogleTasksView';
-import { FirebaseSyncView } from './components/FirebaseSyncView';
-import { initAuth, googleSignIn, logout } from './services/googleAuth';
-import { testFirestoreConnection, fetchUserSettingsFromFirestore, saveUserSettingsToFirestore } from './services/firebaseDb';
+import { GoogleSheetsDbView } from './components/GoogleSheetsDbView';
+import {
+  loadShiftsFromLocalStorage,
+  saveShiftsToLocalStorage,
+  fetchShiftsFromGoogleSheets,
+  loadDbConfig,
+  saveUserSettings,
+  loadUserSettings,
+} from './services/googleSheetsDb';
 import { getSampleRosterData } from './data/mockRosters';
 import { DutyShift } from './types/roster';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -22,21 +27,19 @@ import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  // Active Tab: Roster, Tasks, Sync, Sheets DB (replaces Firebase), LINE, Desk Calendar
+  const [activeTab, setActiveTab] = useState<AppTab>('roster');
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<'roster' | 'tasks' | 'sync' | 'firebase' | 'line' | 'desk-calendar'>('roster');
-
-  // Duty Roster Shifts
+  // Duty Roster Shifts loaded from local database cache or hospital default
   const [shifts, setShifts] = useState<DutyShift[]>(() => {
-    return getSampleRosterData();
+    const cached = loadShiftsFromLocalStorage();
+    return cached.length > 0 ? cached : getSampleRosterData();
   });
 
   // LINE OA Access Token
   const [channelAccessToken, setChannelAccessToken] = useState<string>(() => {
-    return localStorage.getItem('duty_line_channel_token') || '';
+    const saved = loadUserSettings();
+    return saved.lineChannelToken || localStorage.getItem('duty_line_channel_token') || '';
   });
 
   // Target shift for single notification from table
@@ -45,70 +48,35 @@ export default function App() {
   // Workspace Sync Modal state
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
-  // Test Firestore connection on boot per Firebase guidelines
+  // Auto-sync from Google Sheets database on boot if enabled
   useEffect(() => {
-    testFirestoreConnection().then(ok => {
-      console.log('Firebase Firestore connection check:', ok ? 'CONNECTED (asia-east1)' : 'OFFLINE');
-    });
+    const config = loadDbConfig();
+    if (config.autoSyncOnOpen) {
+      fetchShiftsFromGoogleSheets()
+        .then(res => {
+          if (res.shifts && res.shifts.length > 0) {
+            setShifts(res.shifts);
+            saveShiftsToLocalStorage(res.shifts);
+            console.log(`Google Sheets Database connected: synced ${res.shifts.length} shifts`);
+          }
+        })
+        .catch(err => {
+          console.warn('Initial Google Sheets sync notice (using cached data):', err.message);
+        });
+    }
   }, []);
 
-  // Save LINE token to localStorage whenever changed and sync to Firestore if user logged in
+  // Save LINE token to localStorage whenever changed
   useEffect(() => {
     if (channelAccessToken) {
       localStorage.setItem('duty_line_channel_token', channelAccessToken);
-      if (user) {
-        saveUserSettingsToFirestore({ lineChannelToken: channelAccessToken }).catch(() => {});
-      }
+      saveUserSettings({ lineChannelToken: channelAccessToken });
     }
-  }, [channelAccessToken, user]);
+  }, [channelAccessToken]);
 
-  // Firebase Auth listener
-  useEffect(() => {
-    const unsubscribe = initAuth(
-      async (currentUser, accessToken) => {
-        setUser(currentUser);
-        setToken(accessToken);
-
-        // Fetch user settings from Firestore if available
-        try {
-          const settings = await fetchUserSettingsFromFirestore();
-          if (settings?.lineChannelToken && !channelAccessToken) {
-            setChannelAccessToken(settings.lineChannelToken);
-          }
-        } catch (e) {
-          console.warn('Could not load user settings from Firestore:', e);
-        }
-      },
-      () => {
-        setUser(null);
-        setToken(null);
-      }
-    );
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, []);
-
-  const handleLogin = async () => {
-    setIsLoggingIn(true);
-    try {
-      const result = await googleSignIn();
-      if (result) {
-        setUser(result.user);
-        setToken(result.accessToken);
-      }
-    } catch (err: any) {
-      console.error('Google Sign In failed:', err);
-      alert(err.message || 'การลงชื่อเข้าใช้ Google ไม่สำเร็จ');
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    setUser(null);
-    setToken(null);
+  const handleUpdateShifts = (newShifts: DutyShift[]) => {
+    setShifts(newShifts);
+    saveShiftsToLocalStorage(newShifts);
   };
 
   const handleSingleNotificationTrigger = (shift: DutyShift) => {
@@ -123,11 +91,6 @@ export default function App() {
 
       {/* Top Navigation & Status Bar */}
       <Header
-        user={user}
-        token={token}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
-        isLoggingIn={isLoggingIn}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         shiftsCount={shifts.length}
@@ -144,27 +107,21 @@ export default function App() {
           <div className="space-y-6">
             <SheetImporter
               shifts={shifts}
-              onRosterLoaded={newShifts => setShifts(newShifts)}
-              token={token}
-              onRequireAuth={handleLogin}
+              onRosterLoaded={handleUpdateShifts}
             />
 
             <RosterAnalyzer
               shifts={shifts}
-              onUpdateShifts={setShifts}
+              onUpdateShifts={handleUpdateShifts}
               onSendSingleNotification={handleSingleNotificationTrigger}
               onOpenSyncModal={() => setIsSyncModalOpen(true)}
             />
           </div>
         )}
 
-        {/* Tab 2: Interactive Google Tasks */}
+        {/* Tab 2: Interactive Google Tasks (Single User Mode) */}
         {activeTab === 'tasks' && (
-          <GoogleTasksView
-            shifts={shifts}
-            token={token}
-            onRequireAuth={handleLogin}
-          />
+          <GoogleTasksView shifts={shifts} />
         )}
 
         {/* Tab 3: Workspace Sync View */}
@@ -179,7 +136,7 @@ export default function App() {
                   ซิงค์ตารางเวรเข้าสู่ Google Tasks & Calendar
                 </h2>
                 <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
-                  นำข้อมูลคนอยู่เวร วันที่ และช่วงเวลากะที่วิเคราะห์ได้จาก Google Sheets ไปสร้างเป็นกิจกรรมบน Google Calendar ของคุณหรือของทีม พร้อมสร้างรายการแจ้งเตือนสิ่งที่ต้องทำใน Google Tasks โดยอัตโนมัติ
+                  นำข้อมูลคนอยู่เวร วันที่ และช่วงเวลากะที่วิเคราะห์ได้จากฐานข้อมูล Google Sheets ไปสร้างเป็นกิจกรรมบน Google Calendar ของคุณหรือของทีม พร้อมสร้างรายการแจ้งเตือนสิ่งที่ต้องทำใน Google Tasks ได้ทันที
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -215,20 +172,18 @@ export default function App() {
 
             <RosterAnalyzer
               shifts={shifts}
-              onUpdateShifts={setShifts}
+              onUpdateShifts={handleUpdateShifts}
               onSendSingleNotification={handleSingleNotificationTrigger}
               onOpenSyncModal={() => setIsSyncModalOpen(true)}
             />
           </div>
         )}
 
-        {/* Tab 4: Firebase Firestore Cloud Persistence */}
-        {activeTab === 'firebase' && (
-          <FirebaseSyncView
+        {/* Tab 4: Google Sheets Database Center (Replaces Firebase Firestore) */}
+        {activeTab === 'sheets-db' && (
+          <GoogleSheetsDbView
             shifts={shifts}
-            onLoadRoster={loadedShifts => setShifts(loadedShifts)}
-            token={token}
-            onRequireAuth={handleLogin}
+            onUpdateShifts={handleUpdateShifts}
           />
         )}
 
@@ -236,7 +191,7 @@ export default function App() {
         {activeTab === 'line' && (
           <LineNotifier
             shifts={shifts}
-            onUpdateShifts={setShifts}
+            onUpdateShifts={handleUpdateShifts}
             channelAccessToken={channelAccessToken}
             setChannelAccessToken={setChannelAccessToken}
             singleShiftToNotify={singleShiftToNotify}
@@ -255,8 +210,6 @@ export default function App() {
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         shifts={shifts}
-        token={token}
-        onRequireAuth={handleLogin}
       />
 
       {/* Native App-Style Bottom Navigation for Mobile / Tablet screens */}

@@ -1,39 +1,28 @@
 import React from 'react';
-import { User } from 'firebase/auth';
 import {
   Calendar as CalendarIcon,
   CheckSquare,
   FileSpreadsheet,
   MessageSquare,
-  LogOut,
-  Sparkles,
   ShieldCheck,
   CalendarCheck,
   Building2,
   Database,
-  Wifi,
-  WifiOff,
+  UserCheck,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
+export type AppTab = 'roster' | 'tasks' | 'sync' | 'sheets-db' | 'line' | 'desk-calendar';
+
 interface HeaderProps {
-  user: User | null;
-  token: string | null;
-  onLogin: () => void;
-  onLogout: () => void;
-  isLoggingIn: boolean;
-  activeTab: 'roster' | 'tasks' | 'sync' | 'firebase' | 'line' | 'desk-calendar';
-  setActiveTab: (tab: 'roster' | 'tasks' | 'sync' | 'firebase' | 'line' | 'desk-calendar') => void;
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   shiftsCount: number;
   lineConfigured: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  user,
-  onLogin,
-  onLogout,
-  isLoggingIn,
   activeTab,
   setActiveTab,
   shiftsCount,
@@ -64,17 +53,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
               <p className="text-[10px] sm:text-[11px] font-mono text-neutral-400 hidden lg:block truncate">
-                ตารางเวร 1 - 31 ต.ค. 2569 • Tasks & Sheets • Firebase (asia-east1) • LINE OA • PWA Offline Ready
+                ตารางเวร 1 - 31 ต.ค. 2569 • ฐานข้อมูล Google Sheets Database • LINE OA • โหมดใช้งานคนเดียว (PWA)
               </p>
             </div>
           </div>
 
-          {/* Actions: PWA Install + User & Auth Status */}
-          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+          {/* Actions: Online Status + Single-User Mode Badge + PWA Install */}
+          <div className="flex items-center space-x-2 sm:space-x-2.5 shrink-0">
             {/* Online/Offline Status Indicator */}
             <div
               title={isOnline ? 'เชื่อมต่อออนไลน์พร้อมใช้งาน' : 'โหมดออฟไลน์ ทำงานจากแคช'}
-              className="flex items-center gap-1 px-2 py-1 rounded bg-neutral-900 border border-neutral-800 text-[10px] font-mono text-neutral-400 hidden xs:flex"
+              className="flex items-center gap-1.5 px-2 py-1 rounded bg-neutral-900 border border-neutral-800 text-[10px] font-mono text-neutral-400 hidden xs:flex"
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
@@ -84,52 +73,22 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden md:inline">{isOnline ? 'Online' : 'Offline'}</span>
             </div>
 
+            {/* Single User Badge (No Auth Required) */}
+            <div
+              title="ใช้งานในโหมดเดี่ยว (Single User Mode) ไม่ต้องล็อกอิน ข้อมูลซิงค์กับ Google Sheets"
+              className="flex items-center gap-1.5 bg-[#18181B] px-2.5 py-1 rounded-lg border border-neutral-800 text-xs font-mono text-neutral-200"
+            >
+              <div className="w-5 h-5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center text-[10px] font-bold">
+                <UserCheck className="w-3 h-3" />
+              </div>
+              <div className="hidden sm:block text-left text-[11px]">
+                <span className="font-semibold text-white">ผู้ใช้งาน</span>
+                <span className="text-neutral-500 ml-1.5 text-[10px]">โหมดเดี่ยว</span>
+              </div>
+            </div>
+
             {/* PWA Install Button */}
             <PWAInstallButton variant="header" />
-            {user ? (
-              <div className="flex items-center space-x-3 bg-[#18181B] px-3 py-1.5 rounded-lg border border-neutral-800">
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt={user.displayName || 'User'}
-                    className="w-6 h-6 rounded-full border border-neutral-700"
-                  />
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-neutral-700 flex items-center justify-center text-[10px] font-bold text-white font-mono">
-                    {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
-                  </div>
-                )}
-                <div className="hidden md:block text-left text-xs font-mono">
-                  <div className="font-semibold text-neutral-200 truncate max-w-[130px]">
-                    {user.displayName || user.email}
-                  </div>
-                  <div className="text-[10px] text-emerald-400 flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 inline" /> Google & Firebase Active
-                  </div>
-                </div>
-                <button
-                  onClick={onLogout}
-                  title="ออกจากระบบ"
-                  className="p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-800 transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={onLogin}
-                disabled={isLoggingIn}
-                className="flex items-center space-x-2 bg-white text-black hover:bg-neutral-200 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-colors active:translate-y-px disabled:opacity-50 font-mono"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 48 48">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                </svg>
-                <span>{isLoggingIn ? 'กำลังเชื่อมต่อ...' : 'ลงชื่อเข้าใช้ Google'}</span>
-              </button>
-            )}
           </div>
         </div>
 
@@ -175,15 +134,15 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('firebase')}
+            onClick={() => setActiveTab('sheets-db')}
             className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'firebase'
+              activeTab === 'sheets-db'
                 ? 'bg-neutral-800 text-white font-semibold'
                 : 'text-neutral-400 hover:text-white'
             }`}
           >
-            <Database className="w-3.5 h-3.5 text-amber-500" />
-            <span>Firebase Firestore</span>
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span>ฐานข้อมูล Google Sheets</span>
           </button>
 
           <button
@@ -195,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-            <span>แจ้งเตือน LINE OA (3 เวลา)</span>
+            <span>แจ้งเตือน LINE OA</span>
             <span
               className={`w-1.5 h-1.5 rounded-full ${
                 lineConfigured ? 'bg-emerald-400' : 'bg-neutral-600'

@@ -24,13 +24,14 @@ import {
   createRosterSpreadsheet,
 } from '../services/googleWorkspace';
 import { getSobprapHospitalRoster, HOSPITAL_INFO } from '../data/mockRosters';
+import { downloadShiftsCSV } from '../services/googleSheetsDb';
 import confetti from 'canvas-confetti';
 
 interface SheetImporterProps {
   shifts: DutyShift[];
   onRosterLoaded: (shifts: DutyShift[]) => void;
-  token: string | null;
-  onRequireAuth: () => void;
+  token?: string | null;
+  onRequireAuth?: () => void;
 }
 
 export const SheetImporter: React.FC<SheetImporterProps> = ({
@@ -234,7 +235,7 @@ export const SheetImporter: React.FC<SheetImporterProps> = ({
 
   const handleExportToNewSheet = async () => {
     if (!token) {
-      onRequireAuth();
+      onRequireAuth?.();
       return;
     }
 
@@ -263,7 +264,7 @@ export const SheetImporter: React.FC<SheetImporterProps> = ({
             <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-white text-sm">
                 {HOSPITAL_INFO.name}
               </span>
@@ -285,7 +286,7 @@ export const SheetImporter: React.FC<SheetImporterProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="w-full md:w-auto flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 shrink-0">
           <button
             onClick={() => {
               const data = getSobprapHospitalRoster();
@@ -298,7 +299,7 @@ export const SheetImporter: React.FC<SheetImporterProps> = ({
             โหลดข้อมูลชีต รพ.สบปราบ (20 กะ)
           </button>
 
-          {token && (
+          {token ? (
             <button
               onClick={handleExportToNewSheet}
               disabled={isExporting || shifts.length === 0}
@@ -316,6 +317,19 @@ export const SheetImporter: React.FC<SheetImporterProps> = ({
                   ส่งออกเป็นชีตใหม่
                 </>
               )}
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                downloadShiftsCSV(shifts);
+                setFetchSuccessMessage('ดาวน์โหลดไฟล์ CSV สำหรับนำเข้า Google Sheets สำเร็จแล้ว');
+              }}
+              disabled={shifts.length === 0}
+              className="flex items-center justify-center gap-2 bg-[#27272A] hover:bg-neutral-700 text-white px-3.5 py-2 rounded-lg text-xs font-medium font-mono border border-neutral-700 transition-colors disabled:opacity-50"
+              title="ส่งออกตารางเวรนี้เป็นไฟล์ CSV สำหรับนำเข้า Google Sheets ทันที"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              ส่งออกชีต (CSV)
             </button>
           )}
         </div>
@@ -341,12 +355,12 @@ export const SheetImporter: React.FC<SheetImporterProps> = ({
 
       {/* Sheet URL or ID Input */}
       <div className="pt-1">
-        <div className="flex items-center justify-between mb-1.5 font-mono">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1.5 font-mono">
           <label className="text-[11px] uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
             <LinkIcon className="w-3.5 h-3.5" />
             GOOGLE SPREADSHEET SOURCE
           </label>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             {token && driveSheets.length > 0 && (
               <button
                 type="button"

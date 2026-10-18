@@ -18,14 +18,15 @@ import {
   createTaskList,
   createGoogleTask,
 } from '../services/googleWorkspace';
+import { downloadICalendarFile, downloadShiftsCSV } from '../services/googleSheetsDb';
 import confetti from 'canvas-confetti';
 
 interface WorkspaceSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
   shifts: DutyShift[];
-  token: string | null;
-  onRequireAuth: () => void;
+  token?: string | null;
+  onRequireAuth?: () => void;
   onSyncComplete?: () => void;
 }
 
@@ -115,7 +116,7 @@ export const WorkspaceSyncModal: React.FC<WorkspaceSyncModalProps> = ({
 
   const handleExecuteSync = async () => {
     if (!token) {
-      onRequireAuth();
+      onRequireAuth?.();
       return;
     }
 
@@ -241,16 +242,49 @@ export const WorkspaceSyncModal: React.FC<WorkspaceSyncModalProps> = ({
           </div>
 
           {!token ? (
-            <div className="p-6 text-center bg-[#18181B] rounded-lg border border-neutral-800">
-              <p className="text-xs text-neutral-300 mb-3">
-                คุณยังไม่ได้เชื่อมต่อบัญชี Google Workspace
-              </p>
-              <button
-                onClick={onRequireAuth}
-                className="inline-flex items-center gap-2 bg-white text-black font-semibold px-4 py-2 rounded-lg text-xs hover:bg-neutral-200 transition-colors font-mono"
-              >
-                ลงชื่อเข้าใช้ Google เพื่อดำเนินการต่อ
-              </button>
+            <div className="p-5 text-center bg-[#18181B] rounded-lg border border-neutral-800 space-y-4">
+              <div className="text-xs text-neutral-300">
+                <span className="font-bold text-white">โหมดใช้งานคนเดียว (Single User Mode):</span>
+                <p className="text-neutral-400 mt-1">
+                  สามารถส่งออกตารางเวร {shifts.length} กะ เข้าสู่ Google Calendar หรือ Google Sheets ได้ทันทีโดยไม่ต้องเชื่อมต่อ API หรือล็อกอิน
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  onClick={() => {
+                    downloadICalendarFile(shifts);
+                    confetti({ particleCount: 40, spread: 50 });
+                  }}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white text-black font-semibold px-4 py-2.5 rounded-lg text-xs hover:bg-neutral-200 transition-colors font-mono"
+                >
+                  <CalendarIcon className="w-4 h-4 text-purple-600" />
+                  ส่งออก Google Calendar (.ics)
+                </button>
+
+                <button
+                  onClick={() => {
+                    downloadShiftsCSV(shifts);
+                    confetti({ particleCount: 40, spread: 50 });
+                  }}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#27272A] hover:bg-neutral-700 text-neutral-200 border border-neutral-700 font-medium px-4 py-2.5 rounded-lg text-xs transition-colors font-mono"
+                >
+                  <CheckSquare className="w-4 h-4 text-emerald-400" />
+                  ส่งออก Google Sheets (CSV)
+                </button>
+              </div>
+
+              {onRequireAuth && (
+                <div className="pt-2 border-t border-neutral-800 text-[11px] text-neutral-500 font-mono">
+                  หรือต้องการเชื่อมต่อ Google Workspace API โดยตรง:{' '}
+                  <button
+                    onClick={onRequireAuth}
+                    className="text-neutral-300 underline hover:text-white ml-1"
+                  >
+                    ลงชื่อเข้าใช้ Google
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <>

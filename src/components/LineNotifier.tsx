@@ -49,7 +49,7 @@ import {
   HOSPITAL_INFO,
 } from '../data/mockRosters';
 import confetti from 'canvas-confetti';
-import { logNotificationToFirestore, saveUserSettingsToFirestore } from '../services/firebaseDb';
+import { saveNotificationLog, saveUserSettings } from '../services/googleSheetsDb';
 import { FlexCardCustomizer } from './FlexCardCustomizer';
 
 interface LineNotifierProps {
@@ -294,14 +294,14 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
       confetti({ particleCount: 45, spread: 60 });
 
       const staffSummary = targetShifts.map(s => s.staffName).join(', ') || 'ไม่มีเจ้าหน้าที่ในวันนี้';
-      logNotificationToFirestore({
-        id: `log-${Date.now()}`,
-        shiftId: targetDate,
+      saveNotificationLog({
         staffName: `[กลุ่มเวร] ${staffSummary}`,
+        lineUserId: targetMode === 'group' ? lineGroupId : targetMode === 'broadcast' ? 'BROADCAST' : testUserId,
         shiftDate: targetDate,
-        type: slotTitle,
-        recipient: destinationName,
+        shiftName: slotTitle,
+        triggerTimeText: triggerText,
         status: 'success',
+        messageType: messageMode,
       });
       setLogs(prev => [
         {
@@ -1093,8 +1093,8 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
           testUserId={testUserId}
           targetMode={targetMode}
           onSaveToCloud={async () => {
-            await saveUserSettingsToFirestore({
-              updatedAt: new Date().toISOString(),
+            saveUserSettings({
+              lineChannelToken: channelAccessToken,
             });
           }}
         />

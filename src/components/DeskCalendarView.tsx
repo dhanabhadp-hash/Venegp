@@ -331,9 +331,13 @@ export const DeskCalendarView: React.FC<DeskCalendarViewProps> = ({ shifts }) =>
 
       {/* 2. Swiss Modernism Desk Calendar Mockup */}
       <div className="bg-[#09090B] border border-neutral-800 rounded-lg p-2.5 sm:p-6 lg:p-10 overflow-x-auto">
+        <div className="md:hidden text-[11px] font-mono text-neutral-400 mb-2 flex items-center justify-between">
+          <span>👈 เลื่อนแนวนอนเพื่อดูทั้ง 7 วัน 👉</span>
+          <span className="text-neutral-500">ขนาดภาพปรับให้พอดีสำหรับการส่งออก PNG</span>
+        </div>
         <div
           ref={calendarRef}
-          className="min-w-[330px] max-w-4xl mx-auto bg-[#121214] text-white border border-neutral-800 rounded-lg shadow-2xl overflow-hidden"
+          className="min-w-[620px] lg:min-w-0 max-w-4xl mx-auto bg-[#121214] text-white border border-neutral-800 rounded-lg shadow-2xl overflow-hidden"
         >
           {/* Industrial Wire Ring Bar */}
           <div className="h-8 sm:h-10 bg-[#18181B] border-b border-neutral-800 flex items-center justify-around px-3 sm:px-6">
