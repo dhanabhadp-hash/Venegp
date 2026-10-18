@@ -24,7 +24,13 @@ import {
   Radio,
   Share2,
 } from 'lucide-react';
-import { DutyShift, NotificationRule, NotificationLog } from '../types/roster';
+import {
+  DutyShift,
+  NotificationRule,
+  NotificationLog,
+  FlexCardConfig,
+  DEFAULT_FLEX_CARD_CONFIG,
+} from '../types/roster';
 import {
   testLineChannelToken,
   sendLinePushMessage,
@@ -43,7 +49,8 @@ import {
   HOSPITAL_INFO,
 } from '../data/mockRosters';
 import confetti from 'canvas-confetti';
-import { logNotificationToFirestore } from '../services/firebaseDb';
+import { logNotificationToFirestore, saveUserSettingsToFirestore } from '../services/firebaseDb';
+import { FlexCardCustomizer } from './FlexCardCustomizer';
 
 interface LineNotifierProps {
   shifts: DutyShift[];
@@ -123,8 +130,26 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
   const [actionResult, setActionResult] = useState<{ success: boolean; message: string; payload?: any } | null>(null);
   const [logs, setLogs] = useState<NotificationLog[]>([]);
 
+  // Flex Card Customizer Config
+  const [flexConfig, setFlexConfig] = useState<FlexCardConfig>(() => {
+    const saved = localStorage.getItem('duty_flex_card_config');
+    if (saved) {
+      try {
+        return { ...DEFAULT_FLEX_CARD_CONFIG, ...JSON.parse(saved) };
+      } catch (e) {
+        console.warn('Failed parsing saved flex config', e);
+      }
+    }
+    return DEFAULT_FLEX_CARD_CONFIG;
+  });
+
+  // Save flexConfig changes
+  useEffect(() => {
+    localStorage.setItem('duty_flex_card_config', JSON.stringify(flexConfig));
+  }, [flexConfig]);
+
   // Sub-tabs
-  const [subTab, setSubTab] = useState<'group-setup' | 'preview' | 'staff' | 'apps-script'>('group-setup');
+  const [subTab, setSubTab] = useState<'group-setup' | 'flex-customizer' | 'preview' | 'staff' | 'apps-script'>('group-setup');
   const [copiedScript, setCopiedScript] = useState(false);
 
   // Save Group ID to localStorage
@@ -177,23 +202,23 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
     let triggerText = '';
 
     if (slotName === 'weekday_1555') {
-      slotTitle = '📢 แจ้งเตือนกะบ่าย (เวลา 15:55 น.) • วันจันทร์ - ศุกร์';
-      timingDetail = 'อีก 5 นาทีจะเริ่มเวลาปฏิบัติงานกะบ่าย (16:00 - 20:00 น.) ขอให้เจ้าหน้าที่เข้าปฏิบัติงานและตรวจเช็คเอกสารยา';
+      slotTitle = flexConfig.weekday1555Title || '📢 แจ้งเตือนกะบ่าย (เวลา 15:55 น.) • วันจันทร์ - ศุกร์';
+      timingDetail = flexConfig.weekday1555Desc || 'อีก 5 นาทีจะเริ่มเวลาปฏิบัติงานกะบ่าย (16:00 - 20:00 น.) ขอให้เจ้าหน้าที่เข้าปฏิบัติงานและตรวจเช็คเอกสารยา';
       triggerText = '15:55 น. (จันทร์-ศุกร์ ครั้งที่ 1)';
     } else if (slotName === 'weekday_2000') {
-      slotTitle = '📋 แจ้งเตือนปิดกะบ่าย & ส่งมอบเวร (เวลา 20:00 น.) • วันจันทร์ - ศุกร์';
-      timingDetail = 'สิ้นสุดเวลาปฏิบัติงานกะบ่าย 20:00 น. ขอให้สรุปยอดเอกสาร ปิดระบบ และลงบันทึกรายงานให้เรียบร้อย';
+      slotTitle = flexConfig.weekday2000Title || '📋 แจ้งเตือนปิดกะบ่าย & ส่งมอบเวร (เวลา 20:00 น.) • วันจันทร์ - ศุกร์';
+      timingDetail = flexConfig.weekday2000Desc || 'สิ้นสุดเวลาปฏิบัติงานกะบ่าย 20:00 น. ขอให้สรุปยอดเอกสาร ปิดระบบ และลงบันทึกรายงานให้เรียบร้อย';
       triggerText = '20:00 น. (จันทร์-ศุกร์ ครั้งที่ 2)';
     } else {
-      slotTitle = '🌅 แจ้งเตือนเวรเช้าวันหยุด (เวลา 07:55 น.) • เสาร์ - อาทิตย์ / นักขัตฤกษ์';
-      timingDetail = 'เวรวันหยุด เช้า OT (08:30 - 16:30 น.) บริหารจัดการคลังยา เอกสาร และเวชภัณฑ์';
+      slotTitle = flexConfig.weekend0755Title || '🌅 แจ้งเตือนเวรเช้าวันหยุด (เวลา 07:55 น.) • เสาร์ - อาทิตย์ / นักขัตฤกษ์';
+      timingDetail = flexConfig.weekend0755Desc || 'เวรวันหยุด เช้า OT (08:30 - 16:30 น.) บริหารจัดการคลังยา เอกสาร และเวชภัณฑ์';
       triggerText = '07:55 น. (เสาร์-อาทิตย์/นักขัตฤกษ์)';
     }
 
     const messages =
       messageMode === 'flex'
-        ? [buildGroupRosterFlexMessage(targetShifts, targetDate, slotTitle, timingDetail)]
-        : [{ type: 'text', text: buildGroupRosterTextMessage(targetShifts, targetDate, slotTitle, timingDetail) }];
+        ? [buildGroupRosterFlexMessage(targetShifts, targetDate, slotTitle, timingDetail, flexConfig)]
+        : [{ type: 'text', text: buildGroupRosterTextMessage(targetShifts, targetDate, slotTitle, timingDetail, flexConfig) }];
 
     const staffSummary = targetShifts.map(s => s.staffName).join(', ') || 'ไม่มีเจ้าหน้าที่ในวันนี้';
 
@@ -606,6 +631,21 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
         </button>
 
         <button
+          onClick={() => setSubTab('flex-customizer')}
+          className={`px-4 py-2 font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${
+            subTab === 'flex-customizer'
+              ? 'border-emerald-400 text-emerald-400 font-semibold'
+              : 'border-transparent text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span>ปรับแต่งข้อความ Flex Card</span>
+          <span className="px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/20 text-emerald-300 font-mono">
+            กำหนดเอง
+          </span>
+        </button>
+
+        <button
           onClick={() => setSubTab('preview')}
           className={`px-4 py-2 font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${
             subTab === 'preview'
@@ -718,6 +758,22 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
                     </div>
                   </button>
                 </div>
+
+                {messageMode === 'flex' && (
+                  <div className="mt-3 p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between">
+                    <span className="text-[11px] text-emerald-300">
+                      💡 ปรับแต่งข้อความในการ์ด: <strong>{flexConfig.hospitalName}</strong> • ปุ่ม <strong>{flexConfig.button1Label}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSubTab('flex-customizer')}
+                      className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <SlidersHorizontal className="w-3 h-3" />
+                      ปรับแต่งข้อความการ์ด
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1026,6 +1082,24 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
         </div>
       )}
 
+      {/* Sub-Tab: Flex Card Text & Design Customizer */}
+      {subTab === 'flex-customizer' && (
+        <FlexCardCustomizer
+          config={flexConfig}
+          onChangeConfig={setFlexConfig}
+          sampleShifts={shifts}
+          channelAccessToken={channelAccessToken}
+          lineGroupId={lineGroupId}
+          testUserId={testUserId}
+          targetMode={targetMode}
+          onSaveToCloud={async () => {
+            await saveUserSettingsToFirestore({
+              updatedAt: new Date().toISOString(),
+            });
+          }}
+        />
+      )}
+
       {/* Sub-Tab 2: Phone Mockup Live Preview of Group Message */}
       {subTab === 'preview' && (
         <div className="grid grid-cols-12 gap-6">
@@ -1041,7 +1115,9 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
                     Rx
                   </div>
                   <div>
-                    <div className="text-xs font-bold leading-none">กลุ่มเวรเภสัชกรรม รพ.สบปราบ (4)</div>
+                    <div className="text-xs font-bold leading-none truncate max-w-[170px]">
+                      {flexConfig.hospitalName || 'กลุ่มเวรเภสัชกรรม รพ.สบปราบ'}
+                    </div>
                     <div className="text-[9px] text-emerald-400 font-mono mt-0.5">LINE Group Chat</div>
                   </div>
                 </div>
@@ -1060,30 +1136,40 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
                 {/* Rich Flex Card in Group */}
                 <div className="bg-white rounded-xl overflow-hidden shadow-lg text-neutral-900 text-xs">
                   {/* Card Header */}
-                  <div className="bg-[#18181B] text-white p-3.5">
+                  <div
+                    style={{ backgroundColor: flexConfig.headerBgColor || '#18181B' }}
+                    className="text-white p-3.5 transition-colors"
+                  >
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-mono text-emerald-400 font-bold tracking-wider">
-                        รพ.สบปราบ • เภสัชกรรม
+                      <span
+                        style={{ color: flexConfig.headerTextColor || '#10B981' }}
+                        className="text-[10px] font-mono font-bold tracking-wider truncate max-w-[170px]"
+                      >
+                        {flexConfig.hospitalName || 'รพ.สบปราบ • เภสัชกรรม'}
                       </span>
-                      <span className="text-[9px] font-mono text-neutral-400">GROUP BROADCAST</span>
+                      <span className="text-[9px] font-mono text-neutral-400">
+                        {flexConfig.badgeText || 'GROUP BROADCAST'}
+                      </span>
                     </div>
                     <div className="text-sm font-bold mt-1 text-white">
                       {isSelectedDateHoliday
-                        ? '🌅 แจ้งเตือนเวรเช้าวันหยุด (เวลา 07:55 น.)'
-                        : '📢 แจ้งเตือนกะบ่าย (เวลา 15:55 น.)'}
+                        ? (flexConfig.weekend0755Title || '🌅 แจ้งเตือนเวรเช้าวันหยุด (เวลา 07:55 น.)')
+                        : (flexConfig.weekday1555Title || '📢 แจ้งเตือนกะบ่าย (เวลา 15:55 น.)')}
                     </div>
                   </div>
 
                   {/* Card Body */}
                   <div className="p-4 space-y-3">
                     <div className="flex justify-between items-baseline border-b border-neutral-100 pb-2">
-                      <span className="text-[11px] text-neutral-500 font-medium">📅 ประจำวันที่:</span>
+                      <span className="text-[11px] text-neutral-500 font-medium">
+                        {flexConfig.dateLabel || '📅 ประจำวันที่:'}
+                      </span>
                       <span className="font-bold text-xs text-neutral-900 font-mono">{selectedDate}</span>
                     </div>
 
                     <div>
                       <div className="text-[11px] font-bold text-neutral-700 mb-1.5">
-                        👥 รายชื่อเจ้าหน้าที่ผู้ปฏิบัติงานอยู่เวร:
+                        {flexConfig.staffSectionTitle || '👥 รายชื่อเจ้าหน้าที่ผู้ปฏิบัติงานอยู่เวร:'}
                       </div>
                       <div className="space-y-1.5">
                         {shiftsOnSelectedDate.length > 0 ? (
@@ -1102,30 +1188,49 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
                                     : 'bg-amber-100 text-amber-800'
                                 }`}
                               >
-                                {s.shiftName}
+                                {s.shiftType === 'morning'
+                                  ? (flexConfig.morningShiftLabel || s.shiftName)
+                                  : (flexConfig.afternoonShiftLabel || s.shiftName)}
                               </span>
                             </div>
                           ))
                         ) : (
-                          <div className="text-neutral-500 text-xs py-1">ไม่มีเจ้าหน้าที่อยู่เวรในวันนี้</div>
+                          <div className="text-neutral-500 text-xs py-1">
+                            {flexConfig.noShiftNotice || 'ไม่มีเจ้าหน้าที่อยู่เวรในวันนี้'}
+                          </div>
                         )}
                       </div>
                     </div>
 
                     <div className="p-2.5 bg-neutral-100 rounded-lg text-[10px] text-neutral-600 leading-relaxed">
-                      <strong>รายละเอียด:</strong>{' '}
+                      <strong>{flexConfig.timingPrefix || 'รายละเอียด:'}</strong>{' '}
                       {isSelectedDateHoliday
-                        ? 'เวรวันหยุด เช้า OT (08:30 - 16:30 น.) บริหารจัดการคลังยา เอกสาร และเวชภัณฑ์'
-                        : 'อีก 5 นาทีจะเริ่มเวลาปฏิบัติงานกะบ่าย (16:00 - 20:00 น.) ขอให้เข้าปฏิบัติงานและตรวจเช็คเอกสารยา'}
+                        ? (flexConfig.weekend0755Desc || 'เวรวันหยุด เช้า OT (08:30 - 16:30 น.) บริหารจัดการคลังยา เอกสาร และเวชภัณฑ์')
+                        : (flexConfig.weekday1555Desc || 'อีก 5 นาทีจะเริ่มเวลาปฏิบัติงานกะบ่าย (16:00 - 20:00 น.) ขอให้เข้าปฏิบัติงานและตรวจเช็คเอกสารยา')}
                     </div>
+
+                    {flexConfig.showAdviceBox && flexConfig.adviceText && (
+                      <div className="p-2.5 bg-amber-50/70 border border-amber-200/60 rounded-lg text-[10px] text-amber-900 leading-relaxed">
+                        {flexConfig.adviceText}
+                      </div>
+                    )}
                   </div>
 
                   {/* Card Footer Button */}
-                  <div className="p-3 bg-neutral-50 border-t border-neutral-100">
-                    <button className="w-full bg-[#06C755] text-white py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm">
+                  <div className="p-3 bg-neutral-50 border-t border-neutral-100 space-y-2">
+                    <button
+                      style={{ backgroundColor: flexConfig.button1Color || '#06C755' }}
+                      className="w-full text-white py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                    >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      สมาชิกในกลุ่มรับทราบเวรแล้ว
+                      {flexConfig.button1Label || 'รับทราบตารางเวร'}
                     </button>
+
+                    {flexConfig.showButton2 && (
+                      <button className="w-full bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-700 py-1.5 rounded-lg font-semibold text-xs transition-colors">
+                        {flexConfig.button2Label || 'ขอแลกเวร'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1167,6 +1272,21 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
                     </button>
                   );
                 })}
+              </div>
+
+              <div className="mt-4 p-4 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-white">ต้องการเปลี่ยนข้อความหรือสีในการ์ด?</div>
+                  <div className="text-[11px] text-neutral-400">แก้ไขชื่อหน่วยงาน, กะเวร, ข้อความแนะนำ, และปุ่มกด</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSubTab('flex-customizer')}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shrink-0"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  ปรับแต่งข้อความการ์ด
+                </button>
               </div>
             </div>
           </div>
