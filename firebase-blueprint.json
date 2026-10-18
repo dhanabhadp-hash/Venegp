@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "Roster": {
+      "title": "Duty Roster",
+      "description": "Collection of duty shifts for a hospital or organization month",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "month": { "type": "string", "maxLength": 20 },
+        "year": { "type": "number" },
+        "hospitalName": { "type": "string", "maxLength": 200 },
+        "department": { "type": "string", "maxLength": 200 },
+        "shifts": { "type": "array" },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "title", "month", "year"]
+    },
+    "NotificationLog": {
+      "title": "LINE Notification Log",
+      "description": "Log of LINE notifications sent for duty shifts",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "shiftId": { "type": "string", "maxLength": 128 },
+        "staffName": { "type": "string", "maxLength": 100 },
+        "shiftDate": { "type": "string", "maxLength": 20 },
+        "type": { "type": "string", "maxLength": 50 },
+        "recipient": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "maxLength": 50 },
+        "sentAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "staffName", "shiftDate", "status"]
+    },
+    "UserSettings": {
+      "title": "User Roster Settings",
+      "description": "User preferences and config for LINE notifications, Sheets and Tasks sync",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "lineChannelToken": { "type": "string", "maxLength": 500 },
+        "defaultSheetId": { "type": "string", "maxLength": 200 },
+        "defaultTaskListId": { "type": "string", "maxLength": 200 },
+        "defaultCalendarId": { "type": "string", "maxLength": 200 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId"]
+    }
+  },
+  "firestore": {
+    "/rosters/{rosterId}": {
+      "schema": "Roster",
+      "description": "User-owned duty rosters"
+    },
+    "/notificationLogs/{logId}": {
+      "schema": "NotificationLog",
+      "description": "History of LINE notifications sent"
+    },
+    "/userSettings/{userId}": {
+      "schema": "UserSettings",
+      "description": "User preferences for sync and notifications"
+    }
+  }
+}

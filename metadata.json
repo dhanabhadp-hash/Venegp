@@ -1,0 +1,8 @@
+{
+  "name": "ตารางเวร",
+  "description": "ระบบจัดการและแจ้งเตือนวันอยู่เวร วิเคราะห์ข้อมูลจาก Google Sheets ซิงค์ Google Tasks และ Calendar แจ้งเตือนล่วงหน้าผ่าน LINE OA Messaging API พร้อมบันทึกข้อมูลใน Firebase Firestore",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
