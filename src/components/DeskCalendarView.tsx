@@ -330,13 +330,13 @@ export const DeskCalendarView: React.FC<DeskCalendarViewProps> = ({ shifts }) =>
       </div>
 
       {/* 2. Swiss Modernism Desk Calendar Mockup */}
-      <div className="bg-[#09090B] border border-neutral-800 rounded-lg p-6 sm:p-10">
+      <div className="bg-[#09090B] border border-neutral-800 rounded-lg p-2.5 sm:p-6 lg:p-10 overflow-x-auto">
         <div
           ref={calendarRef}
-          className="max-w-4xl mx-auto bg-[#121214] text-white border border-neutral-800 rounded-lg shadow-2xl overflow-hidden"
+          className="min-w-[330px] max-w-4xl mx-auto bg-[#121214] text-white border border-neutral-800 rounded-lg shadow-2xl overflow-hidden"
         >
           {/* Industrial Wire Ring Bar */}
-          <div className="h-10 bg-[#18181B] border-b border-neutral-800 flex items-center justify-around px-6">
+          <div className="h-8 sm:h-10 bg-[#18181B] border-b border-neutral-800 flex items-center justify-around px-3 sm:px-6">
             {Array.from({ length: 20 }).map((_, i) => (
               <div key={i} className="flex flex-col items-center">
                 <div className="w-2 h-5 rounded-full bg-neutral-600 shadow transform -translate-y-1.5" />

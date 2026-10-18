@@ -15,6 +15,8 @@ import {
   Trash2,
   CalendarCheck,
   BarChart2,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { DutyShift, ShiftType } from '../types/roster';
 import { isWeekendOrHoliday } from '../data/mockRosters';
@@ -35,6 +37,7 @@ export const RosterAnalyzer: React.FC<RosterAnalyzerProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedShiftType, setSelectedShiftType] = useState<string>('all');
   const [selectedDayType, setSelectedDayType] = useState<string>('all'); // all, weekday, weekend
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // New shift form state (Strictly 2 shifts: เช้า OT & บ่าย 4 ชม. OT)
   const [showAddForm, setShowAddForm] = useState(false);
@@ -323,9 +326,9 @@ export const RosterAnalyzer: React.FC<RosterAnalyzerProps> = ({
           </form>
         )}
 
-        {/* Filter and Search Bar */}
-        <div className="mt-4 flex flex-col sm:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full">
+        {/* Filter, Search, and View Mode Switcher */}
+        <div className="mt-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-neutral-500" />
             <input
               type="text"
@@ -336,128 +339,258 @@ export const RosterAnalyzer: React.FC<RosterAnalyzerProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter className="w-3.5 h-3.5 text-neutral-400" />
-            <select
-              value={selectedShiftType}
-              onChange={e => setSelectedShiftType(e.target.value)}
-              className="bg-[#18181B] border border-neutral-800 text-neutral-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-neutral-600"
-            >
-              <option value="all">ทุกกะการทำงาน (2 กะ)</option>
-              <option value="morning">เช้า OT (08:30 - 16:30)</option>
-              <option value="afternoon">บ่าย 4 ชม. OT (16:00 - 20:00)</option>
-            </select>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
+              <Filter className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <select
+                value={selectedShiftType}
+                onChange={e => setSelectedShiftType(e.target.value)}
+                className="bg-[#18181B] border border-neutral-800 text-neutral-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-neutral-600 w-full sm:w-auto font-mono"
+              >
+                <option value="all">ทุกกะการทำงาน (2 กะ)</option>
+                <option value="morning">เช้า OT (08:30 - 16:30)</option>
+                <option value="afternoon">บ่าย 4 ชม. OT (16:00 - 20:00)</option>
+              </select>
+            </div>
 
             <select
               value={selectedDayType}
               onChange={e => setSelectedDayType(e.target.value)}
-              className="bg-[#18181B] border border-neutral-800 text-neutral-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-neutral-600"
+              className="bg-[#18181B] border border-neutral-800 text-neutral-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-neutral-600 flex-1 sm:flex-initial font-mono"
             >
               <option value="all">ทุกวัน</option>
               <option value="weekday">วันจันทร์ - ศุกร์</option>
-              <option value="weekend">วันเสาร์-อาทิตย์ / นักขัตฤกษ์</option>
+              <option value="weekend">เสาร์-อาทิตย์ / วันหยุด</option>
             </select>
+
+            {/* Layout Toggle: Cards vs Table */}
+            <div className="flex items-center bg-[#18181B] border border-neutral-800 rounded-lg p-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={`p-1.5 rounded-md transition-colors flex items-center gap-1 text-xs ${
+                  viewMode === 'cards'
+                    ? 'bg-neutral-800 text-white font-semibold shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="มุมมองการ์ด (เหมาะกับมือถือ & แท็บเล็ต)"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline text-[11px]">การ์ด</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-md transition-colors flex items-center gap-1 text-xs ${
+                  viewMode === 'table'
+                    ? 'bg-neutral-800 text-white font-semibold shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="มุมมองตารางเต็ม"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline text-[11px]">ตาราง</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Shifts Table */}
-        <div className="mt-4 overflow-x-auto rounded-lg border border-neutral-800">
-          <table className="w-full text-left text-xs text-neutral-300">
-            <thead className="bg-[#18181B] text-neutral-400 font-mono text-[11px] uppercase tracking-wider border-b border-neutral-800">
-              <tr>
-                <th className="p-3">วันที่</th>
-                <th className="p-3">ชื่อคนอยู่เวร</th>
-                <th className="p-3">กะ / ช่วงเวลา</th>
-                <th className="p-3">เงื่อนไขเวลาส่งแจ้งเตือน LINE</th>
-                <th className="p-3">LINE User ID</th>
-                <th className="p-3 text-center">ทดสอบแจ้งเตือน</th>
-                <th className="p-3 text-right">ลบ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-800">
-              {filteredShifts.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-neutral-500 font-mono">
-                    No matching roster entries found
-                  </td>
-                </tr>
-              ) : (
-                filteredShifts.map(shift => {
-                  const isWeekend = isWeekendOrHoliday(shift.date);
-                  return (
-                    <tr key={shift.id} className="hover:bg-neutral-850/60 transition-colors">
-                      <td className="p-3 whitespace-nowrap font-mono font-medium text-white">
-                        {shift.date}
-                        {isWeekend && (
-                          <span className="ml-1.5 text-[10px] text-emerald-400 font-sans">
-                            (วันหยุด)
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 whitespace-nowrap">
-                        <div className="font-semibold text-white">{shift.staffName}</div>
-                      </td>
-                      <td className="p-3 whitespace-nowrap">
+        {/* 1. Mobile & Touch Friendly Card View */}
+        {viewMode === 'cards' && (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {filteredShifts.length === 0 ? (
+              <div className="col-span-full p-8 text-center text-neutral-500 font-mono bg-[#18181B] rounded-lg border border-neutral-800">
+                ไม่พบข้อมูลเวรที่ตรงกับเงื่อนไขการค้นหา
+              </div>
+            ) : (
+              filteredShifts.map(shift => {
+                const isWeekend = isWeekendOrHoliday(shift.date);
+                return (
+                  <div
+                    key={shift.id}
+                    className="p-4 rounded-xl bg-[#18181B] border border-neutral-800 hover:border-neutral-700 transition-all shadow-sm flex flex-col justify-between space-y-3"
+                  >
+                    <div>
+                      {/* Card Header: Date & Shift Type Badge */}
+                      <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${
-                              shift.shiftType === 'morning'
-                                ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
-                                : 'bg-amber-950/60 text-amber-300 border border-amber-800/60'
-                            }`}
-                          >
-                            {shift.shiftType === 'morning' ? <Sun className="w-3 h-3" /> : <Sunset className="w-3 h-3" />}
-                            {shift.shiftName}
+                          <span className="font-mono text-xs font-bold text-white">
+                            📅 {shift.date}
                           </span>
-                          <span className="text-[11px] font-mono text-neutral-400">
-                            {shift.startTime} - {shift.endTime} น.
-                          </span>
+                          {isWeekend && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">
+                              วันหยุด
+                            </span>
+                          )}
                         </div>
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-mono text-[11px]">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold tracking-tight ${
+                            shift.shiftType === 'morning'
+                              ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-800/60'
+                              : 'bg-amber-950/70 text-amber-300 border border-amber-800/60'
+                          }`}
+                        >
+                          {shift.shiftType === 'morning' ? (
+                            <Sun className="w-3 h-3" />
+                          ) : (
+                            <Sunset className="w-3 h-3" />
+                          )}
+                          {shift.shiftName}
+                        </span>
+                      </div>
+
+                      {/* Staff Name & Working Time */}
+                      <div className="mt-2.5">
+                        <h4 className="text-sm font-bold text-white tracking-tight">
+                          {shift.staffName}
+                        </h4>
+                        <div className="text-[11px] font-mono text-neutral-400 mt-1 flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-neutral-500" />
+                          <span>{shift.startTime} - {shift.endTime} น.</span>
+                        </div>
+                      </div>
+
+                      {/* Notification Timing Rule */}
+                      <div className="mt-3 p-2 rounded-lg bg-[#121214] border border-neutral-800/80 text-[11px] font-mono">
+                        <span className="text-neutral-500 block text-[10px] uppercase">
+                          เวลาแจ้งเตือน LINE:
+                        </span>
                         {isWeekend ? (
-                          <span className="text-emerald-400">
-                            07:55 น. (1 ครั้ง)
+                          <span className="text-emerald-400 font-semibold">
+                            🔔 07:55 น. (เช้า OT 1 รอบ)
                           </span>
                         ) : (
-                          <span className="text-neutral-300">
-                            15:55 น. & 20:00 น. (2 ครั้ง)
+                          <span className="text-amber-300 font-semibold">
+                            🔔 15:55 น. & 20:00 น. (บ่าย OT 2 รอบ)
                           </span>
                         )}
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-mono text-[11px]">
-                        {shift.lineUserId ? (
-                          <span className="text-emerald-400 font-mono">
-                            {shift.lineUserId.substring(0, 10)}...
-                          </span>
-                        ) : (
-                          <span className="text-neutral-600 italic font-sans">ยังไม่ผูก</span>
-                        )}
-                      </td>
-                      <td className="p-3 whitespace-nowrap text-center">
-                        <button
-                          onClick={() => onSendSingleNotification(shift)}
-                          className="inline-flex items-center gap-1 bg-[#18181B] hover:bg-neutral-800 text-neutral-200 border border-neutral-700 px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
-                        >
-                          <Send className="w-3 h-3" />
-                          ส่งแจ้งเตือน
-                        </button>
-                      </td>
-                      <td className="p-3 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => handleDeleteShift(shift.id)}
-                          className="p-1.5 text-neutral-500 hover:text-red-400 rounded transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Actions: Quick Notify & Delete */}
+                    <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => onSendSingleNotification(shift)}
+                        className="flex-1 py-1.5 px-3 bg-neutral-800 hover:bg-neutral-700 active:scale-95 text-white text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 font-mono shadow-xs"
+                      >
+                        <Send className="w-3 h-3 text-emerald-400" />
+                        <span>แจ้งเตือน LINE</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteShift(shift.id)}
+                        className="p-2 text-neutral-500 hover:text-red-400 hover:bg-neutral-800 rounded-lg transition-colors"
+                        title="ลบเวรนี้"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* 2. Full Table View for Desktop / Large Screens */}
+        {viewMode === 'table' && (
+          <div className="mt-4 overflow-x-auto rounded-lg border border-neutral-800 no-scrollbar">
+            <table className="w-full text-left text-xs text-neutral-300">
+              <thead className="bg-[#18181B] text-neutral-400 font-mono text-[11px] uppercase tracking-wider border-b border-neutral-800">
+                <tr>
+                  <th className="p-3">วันที่</th>
+                  <th className="p-3">ชื่อคนอยู่เวร</th>
+                  <th className="p-3">กะ / ช่วงเวลา</th>
+                  <th className="p-3">เงื่อนไขเวลาส่งแจ้งเตือน LINE</th>
+                  <th className="p-3">LINE User ID</th>
+                  <th className="p-3 text-center">ทดสอบแจ้งเตือน</th>
+                  <th className="p-3 text-right">ลบ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-800">
+                {filteredShifts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-neutral-500 font-mono">
+                      No matching roster entries found
+                    </td>
+                  </tr>
+                ) : (
+                  filteredShifts.map(shift => {
+                    const isWeekend = isWeekendOrHoliday(shift.date);
+                    return (
+                      <tr key={shift.id} className="hover:bg-neutral-850/60 transition-colors">
+                        <td className="p-3 whitespace-nowrap font-mono font-medium text-white">
+                          {shift.date}
+                          {isWeekend && (
+                            <span className="ml-1.5 text-[10px] text-emerald-400 font-sans">
+                              (วันหยุด)
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          <div className="font-semibold text-white">{shift.staffName}</div>
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${
+                                shift.shiftType === 'morning'
+                                  ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
+                                  : 'bg-amber-950/60 text-amber-300 border border-amber-800/60'
+                              }`}
+                            >
+                              {shift.shiftType === 'morning' ? <Sun className="w-3 h-3" /> : <Sunset className="w-3 h-3" />}
+                              {shift.shiftName}
+                            </span>
+                            <span className="text-[11px] font-mono text-neutral-400">
+                              {shift.startTime} - {shift.endTime} น.
+                            </span>
+                          </div>
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono text-[11px]">
+                          {isWeekend ? (
+                            <span className="text-emerald-400">
+                              07:55 น. (1 ครั้ง)
+                            </span>
+                          ) : (
+                            <span className="text-neutral-300">
+                              15:55 น. & 20:00 น. (2 ครั้ง)
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono text-[11px]">
+                          {shift.lineUserId ? (
+                            <span className="text-emerald-400 font-mono">
+                              {shift.lineUserId.substring(0, 10)}...
+                            </span>
+                          ) : (
+                            <span className="text-neutral-600 italic font-sans">ยังไม่ผูก</span>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-center">
+                          <button
+                            onClick={() => onSendSingleNotification(shift)}
+                            className="inline-flex items-center gap-1 bg-[#18181B] hover:bg-neutral-800 text-neutral-200 border border-neutral-700 px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
+                          >
+                            <Send className="w-3 h-3" />
+                            ส่งแจ้งเตือน
+                          </button>
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-right">
+                          <button
+                            onClick={() => handleDeleteShift(shift.id)}
+                            className="p-1.5 text-neutral-500 hover:text-red-400 rounded transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

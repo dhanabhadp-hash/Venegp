@@ -17,6 +17,9 @@ import { initAuth, googleSignIn, logout } from './services/googleAuth';
 import { testFirestoreConnection, fetchUserSettingsFromFirestore, saveUserSettingsToFirestore } from './services/firebaseDb';
 import { getSampleRosterData } from './data/mockRosters';
 import { DutyShift } from './types/roster';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -115,6 +118,9 @@ export default function App() {
 
   return (
     <div className="min-h-[100dvh] bg-[#09090B] text-[#F4F4F5] flex flex-col font-['Inter','Prompt',sans-serif]">
+      {/* Mobile PWA Install Banner */}
+      <PWAInstallButton variant="banner" />
+
       {/* Top Navigation & Status Bar */}
       <Header
         user={user}
@@ -128,8 +134,11 @@ export default function App() {
         lineConfigured={Boolean(channelAccessToken.trim())}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {/* Offline Status Indicator Toast */}
+      <OfflineIndicator />
+
+      {/* Main Content Area with responsive padding for mobile bottom bar */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-24 md:pb-8">
         {/* Tab 1: Google Sheets & Roster Analyzer */}
         {activeTab === 'roster' && (
           <div className="space-y-6">
@@ -248,6 +257,14 @@ export default function App() {
         shifts={shifts}
         token={token}
         onRequireAuth={handleLogin}
+      />
+
+      {/* Native App-Style Bottom Navigation for Mobile / Tablet screens */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        shiftsCount={shifts.length}
+        lineConfigured={Boolean(channelAccessToken.trim())}
       />
     </div>
   );

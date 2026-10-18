@@ -11,7 +11,11 @@ import {
   CalendarCheck,
   Building2,
   Database,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 interface HeaderProps {
   user: User | null;
@@ -35,36 +39,53 @@ export const Header: React.FC<HeaderProps> = ({
   shiftsCount,
   lineConfigured,
 }) => {
+  const isOnline = useOnlineStatus();
+
   return (
     <header className="border-b border-neutral-800 bg-[#09090B]/95 backdrop-blur-md sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
           {/* Logo & Hospital Title (Swiss Typography) */}
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-lg bg-white text-black flex items-center justify-center font-bold tracking-tight">
-              <Building2 className="w-5 h-5" />
+          <div className="flex items-center space-x-2.5 sm:space-x-3 overflow-hidden">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white text-black flex items-center justify-center font-bold tracking-tight shrink-0 shadow-sm">
+              <Building2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-bold text-base tracking-tight text-white">
+            <div className="truncate">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <span className="font-bold text-sm sm:text-base tracking-tight text-white truncate">
                   รพ.สบปราบ
                 </span>
-                <span className="text-neutral-500 font-mono text-xs">/</span>
-                <span className="text-xs font-mono font-medium text-neutral-300">
+                <span className="text-neutral-500 font-mono text-xs hidden xs:inline">/</span>
+                <span className="text-xs font-mono font-medium text-emerald-400 hidden xs:inline">
                   DUTYSYNC
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
+                <span className="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
                   กลุ่มงานเภสัชกรรม
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-neutral-400 hidden sm:block">
-                ตารางเวร 1 - 31 ต.ค. 2569 • Tasks & Sheets • Firebase Firestore (asia-east1) • LINE OA
+              <p className="text-[10px] sm:text-[11px] font-mono text-neutral-400 hidden lg:block truncate">
+                ตารางเวร 1 - 31 ต.ค. 2569 • Tasks & Sheets • Firebase (asia-east1) • LINE OA • PWA Offline Ready
               </p>
             </div>
           </div>
 
-          {/* User & Auth Status */}
-          <div className="flex items-center space-x-3">
+          {/* Actions: PWA Install + User & Auth Status */}
+          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+            {/* Online/Offline Status Indicator */}
+            <div
+              title={isOnline ? 'เชื่อมต่อออนไลน์พร้อมใช้งาน' : 'โหมดออฟไลน์ ทำงานจากแคช'}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-neutral-900 border border-neutral-800 text-[10px] font-mono text-neutral-400 hidden xs:flex"
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                }`}
+              />
+              <span className="hidden md:inline">{isOnline ? 'Online' : 'Offline'}</span>
+            </div>
+
+            {/* PWA Install Button */}
+            <PWAInstallButton variant="header" />
             {user ? (
               <div className="flex items-center space-x-3 bg-[#18181B] px-3 py-1.5 rounded-lg border border-neutral-800">
                 {user.photoURL ? (

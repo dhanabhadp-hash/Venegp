@@ -1103,9 +1103,9 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
       {/* Sub-Tab 2: Phone Mockup Live Preview of Group Message */}
       {subTab === 'preview' && (
         <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 md:col-span-6 flex justify-center">
+          <div className="col-span-12 md:col-span-6 flex justify-center px-2">
             {/* Phone Screen Mockup */}
-            <div className="w-[330px] bg-[#000000] rounded-[38px] p-3 border-2 border-neutral-800 shadow-2xl">
+            <div className="w-full max-w-[330px] bg-[#000000] rounded-[38px] p-3 border-2 border-neutral-800 shadow-2xl">
               <div className="w-20 h-3.5 bg-neutral-900 rounded-full mx-auto mb-2.5" />
               
               {/* Group Chat Top Bar */}
