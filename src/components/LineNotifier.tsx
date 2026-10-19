@@ -51,6 +51,18 @@ import {
 import confetti from 'canvas-confetti';
 import { saveNotificationLog, saveUserSettings } from '../services/googleSheetsDb';
 import { FlexCardCustomizer } from './FlexCardCustomizer';
+import {
+  getBangkokTime,
+  getActiveTriggerSlot,
+  getNextScheduledTrigger,
+  hasSlotBeenSentToday,
+  isAutoNotifierEnabled,
+  setAutoNotifierEnabled,
+  executeAutoDispatch,
+  BangkokTimeInfo,
+  NextScheduledTriggerInfo,
+  AutoNotificationSlot,
+} from '../services/lineAutoScheduler';
 
 interface LineNotifierProps {
   shifts: DutyShift[];
@@ -147,6 +159,102 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
   useEffect(() => {
     localStorage.setItem('duty_flex_card_config', JSON.stringify(flexConfig));
   }, [flexConfig]);
+
+  // Automated LINE Notification Scheduler State
+  const [bkkTime, setBkkTime] = useState<BangkokTimeInfo>(getBangkokTime);
+  const [isAutoEnabled, setIsAutoEnabled] = useState<boolean>(isAutoNotifierEnabled);
+  const [nextTrigger, setNextTrigger] = useState<NextScheduledTriggerInfo>(() => getNextScheduledTrigger());
+  const [autoSentSlots, setAutoSentSlots] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem('duty_line_auto_sent_history_v1');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Automated Background Dispatcher Interval: Checks conditions every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const currentBkk = getBangkokTime();
+      setBkkTime(currentBkk);
+      setNextTrigger(getNextScheduledTrigger(currentBkk));
+
+      // Check if automated sending is active
+      if (isAutoEnabled) {
+        const activeSlot = getActiveTriggerSlot(currentBkk);
+        if (activeSlot) {
+          const alreadySent = hasSlotBeenSentToday(currentBkk.dateStr, activeSlot);
+          if (!alreadySent) {
+            console.log(`🤖 [LINE Auto-Scheduler] Triggering auto notification for slot: ${activeSlot} at ${currentBkk.timeStr} (Bangkok time)`);
+            executeAutoDispatch(activeSlot, currentBkk.dateStr, {
+              shifts,
+              channelAccessToken,
+              lineGroupId,
+              targetMode,
+              messageMode,
+              flexConfig,
+              isSimulation: !channelAccessToken.trim() && !serverConfig.hasServerSecret,
+            }).then(result => {
+              if (result.success) {
+                confetti({ particleCount: 50, spread: 60 });
+                setActionResult({
+                  success: true,
+                  message: `🤖 [ส่งอัตโนมัติตามเวลาสำเร็จ] ${result.message}`,
+                });
+                setAutoSentSlots(prev => ({
+                  ...prev,
+                  [`${currentBkk.dateStr}_${activeSlot}`]: new Date().toISOString(),
+                }));
+              }
+            });
+          }
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isAutoEnabled, shifts, channelAccessToken, lineGroupId, targetMode, messageMode, flexConfig, serverConfig]);
+
+  const handleToggleAuto = () => {
+    const nextVal = !isAutoEnabled;
+    setIsAutoEnabled(nextVal);
+    setAutoNotifierEnabled(nextVal);
+  };
+
+  const handleTriggerSlotManually = async (slot: AutoNotificationSlot) => {
+    setIsSending(true);
+    setActionResult(null);
+    try {
+      const result = await executeAutoDispatch(slot, selectedDate, {
+        shifts,
+        channelAccessToken,
+        lineGroupId,
+        targetMode,
+        messageMode,
+        flexConfig,
+        isSimulation: !channelAccessToken.trim() && !serverConfig.hasServerSecret,
+      });
+      setActionResult({
+        success: result.success,
+        message: result.message,
+      });
+      if (result.success) {
+        confetti({ particleCount: 45, spread: 60 });
+        setAutoSentSlots(prev => ({
+          ...prev,
+          [`${selectedDate}_${slot}`]: new Date().toISOString(),
+        }));
+      }
+    } catch (err: any) {
+      setActionResult({
+        success: false,
+        message: err.message || 'ส่งแจ้งเตือนไม่สำเร็จ',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   // Sub-tabs
   const [subTab, setSubTab] = useState<'group-setup' | 'flex-customizer' | 'preview' | 'staff' | 'apps-script'>('group-setup');
@@ -687,6 +795,123 @@ export const LineNotifier: React.FC<LineNotifierProps> = ({
         <div className="grid grid-cols-12 gap-6">
           {/* Left Column: Scheduled Trigger Dispatcher (7 cols) */}
           <div className="col-span-12 lg:col-span-7 space-y-4">
+            {/* 1. Automated LINE Notifier Live Control Card */}
+            <div className="bg-[#121214] border border-emerald-500/30 rounded-lg p-5 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-800">
+                <div className="flex items-center gap-3">
+                  <div className={`w-3.5 h-3.5 rounded-full ${isAutoEnabled ? 'bg-emerald-400 animate-ping' : 'bg-neutral-600'}`} />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">
+                        ระบบส่งแจ้งเตือนอัตโนมัติ (AUTOMATED DISPATCHER)
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                        isAutoEnabled ? 'bg-emerald-950 text-emerald-400 border-emerald-700' : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                      }`}>
+                        {isAutoEnabled ? '🟢 อัตโนมัติ: กำลังทำงาน' : '⚪ ปิดชั่วคราว'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      ระบบจะตรวจสอบเวลาและส่งข้อความเข้ากลุ่มไลน์ให้อัตโนมัติเมื่อถึง 3 เวลาตามเกณฑ์ โดยไม่ต้องกดส่งเอง
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={handleToggleAuto}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-1.5 border ${
+                      isAutoEnabled
+                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700 hover:bg-emerald-900/80'
+                        : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{isAutoEnabled ? 'เปิดระบบอัตโนมัติอยู่' : 'คลิกเพื่อเปิดระบบอัตโนมัติ'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Real-time Clock and Next Trigger Indicator */}
+              <div className="grid grid-cols-12 gap-3 mt-4 text-xs font-mono">
+                <div className="col-span-12 sm:col-span-6 bg-[#18181B] p-3 rounded-lg border border-neutral-800">
+                  <div className="text-[10px] text-neutral-400 uppercase flex items-center justify-between">
+                    <span>เวลาประเทศไทยปัจจุบัน (GMT+7):</span>
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  </div>
+                  <div className="text-lg font-bold text-white mt-1 flex items-baseline gap-2">
+                    <span className="text-emerald-400">{bkkTime.timeStr}:{bkkTime.secondsStr} น.</span>
+                    <span className="text-xs font-normal text-neutral-400">({bkkTime.thaiDayName})</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-0.5">
+                    {bkkTime.isHolidayOrWeekend ? '🏖️ เสาร์-อาทิตย์ / วันหยุดนักขัตฤกษ์' : '💼 วันทำการ จันทร์-ศุกร์'}
+                  </div>
+                </div>
+
+                <div className="col-span-12 sm:col-span-6 bg-[#18181B] p-3 rounded-lg border border-neutral-800">
+                  <div className="text-[10px] text-neutral-400 uppercase flex items-center justify-between">
+                    <span>รอบการส่งอัตโนมัติถัดไป:</span>
+                    <Sunset className="w-3.5 h-3.5 text-amber-400" />
+                  </div>
+                  <div className="text-sm font-bold text-amber-300 mt-1 truncate">
+                    🔔 {nextTrigger.triggerDate} {nextTrigger.triggerTime}
+                  </div>
+                  <div className="text-[11px] text-neutral-300 truncate mt-0.5">
+                    {nextTrigger.label}
+                  </div>
+                </div>
+              </div>
+
+              {/* Today's 3 Slots Status Checklist */}
+              <div className="mt-4 pt-3 border-t border-neutral-800/80">
+                <div className="text-[11px] font-mono text-neutral-400 mb-2">
+                  สถานะการส่งอัตโนมัติประจำวัน ({bkkTime.dateStr}):
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {rules.map(rule => {
+                    const ruleSlot = rule.id === 'rule-weekday-1' ? 'weekday_1555' : rule.id === 'rule-weekday-2' ? 'weekday_2000' : 'weekend_0755';
+                    const isSent = hasSlotBeenSentToday(bkkTime.dateStr, ruleSlot as AutoNotificationSlot);
+                    const isApplicableToday = (rule.dayCategory === 'weekday' && !bkkTime.isHolidayOrWeekend) ||
+                                              (rule.dayCategory === 'weekend_holiday' && bkkTime.isHolidayOrWeekend);
+
+                    return (
+                      <div
+                        key={rule.id}
+                        className={`p-2.5 rounded-lg border text-xs font-mono flex flex-col justify-between ${
+                          isSent
+                            ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                            : isApplicableToday
+                            ? 'bg-[#18181B] border-neutral-700 text-neutral-200'
+                            : 'bg-[#141416] border-neutral-800/60 text-neutral-500 opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white">{rule.triggerTime} น.</span>
+                          {isSent ? (
+                            <span className="text-[10px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-700">
+                              ส่งแล้ววันนี้
+                            </span>
+                          ) : isApplicableToday ? (
+                            <span className="text-[10px] bg-neutral-800 text-amber-400 px-1.5 py-0.2 rounded">
+                              รอถึงเวลา
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-neutral-500">
+                              ไม่อยู่ในเกณฑ์วันนี้
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] mt-1 text-neutral-400 truncate">
+                          {rule.name.split(' (')[0]}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* Condition Rules Overview */}
             <div className="bg-[#121214] border border-neutral-800 rounded-lg p-5">
               <div className="text-[11px] font-mono uppercase tracking-wider text-neutral-400 mb-3">

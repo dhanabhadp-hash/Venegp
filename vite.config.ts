@@ -191,6 +191,54 @@ function lineProxyPlugin(): Plugin {
         });
       });
 
+      // Server auto-notification status endpoint
+      const sentHistory: Record<string, string> = {};
+      server.middlewares.use('/api/line/auto-status', async (req, res) => {
+        try {
+          const now = new Date();
+          const bkkDate = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Bangkok',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(now);
+
+          const bkkTime = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Bangkok',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+          }).format(now);
+
+          const bkkDayName = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Bangkok',
+            weekday: 'short',
+          }).format(now);
+          const dayOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(bkkDayName);
+          const isWeekendOrHoliday = dayOfWeek === 0 || dayOfWeek === 6 || ['2026-10-13', '2026-10-23'].includes(bkkDate);
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(
+            JSON.stringify({
+              success: true,
+              bkkDate,
+              bkkTime,
+              dayOfWeek,
+              isWeekendOrHoliday,
+              sentHistory,
+              hasServerSecret: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim()),
+              envGroupId: process.env.LINE_GROUP_ID || '',
+            })
+          );
+        } catch (e: any) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+
       // Google Sheet CSV proxy
       server.middlewares.use('/api/sheet/data', async (req, res) => {
         try {
