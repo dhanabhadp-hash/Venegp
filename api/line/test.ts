@@ -3,32 +3,14 @@ export const config = {
 };
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
+  if (req.method && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
-  const token = body.channelAccessToken?.trim() || process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
-
-  if (!token) {
-    return res.status(400).json({
-      error: 'Missing LINE_CHANNEL_ACCESS_TOKEN. Please configure it in Vercel Environment Variables.',
-    });
-  }
-
-  try {
-    const response = await fetch('https://api.line.me/v2/bot/info', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const data = await response.json();
-    return res.status(response.status).json(data);
-  } catch (error: any) {
-    console.error('LINE test API error:', error);
-    return res.status(500).json({
-      error: error?.message || 'LINE test request failed',
-    });
-  }
+  return res.status(200).json({
+    hasServerSecret: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim()),
+    envGroupId: process.env.LINE_GROUP_ID || '',
+    envUserId: process.env.LINE_USER_ID || '',
+  });
 }
+
