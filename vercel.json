@@ -1,0 +1,300 @@
+export const config = {
+  runtime: 'nodejs',
+};
+
+const DEFAULT_SHEET_ID = '1DzH6jwgFhDiRSylIv6RYODugMpXrp_n_A0q4jfp_jZg';
+const LIST_HOLIDAYS = ['2026-10-13', '2026-10-23'];
+
+type AutoNotificationSlot = 'weekday_1555' | 'weekday_2000' | 'weekend_0755';
+
+type DutyShift = {
+  id: string;
+  date: string;
+  staffName: string;
+  shiftType: 'morning' | 'afternoon';
+  shiftName: string;
+  startTime: string;
+  endTime: string;
+  department: string;
+  notes?: string;
+  lineUserId?: string;
+  phone?: string;
+  status?: string;
+};
+
+function getBangkokDateParts(date: Date = new Date()) {
+  const formatterDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const formatterTime = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const dateStr = formatterDate.format(date);
+  const [hours, minutes] = formatterTime.format(date).split(':');
+  const timeStr = `${hours}:${minutes}`;
+
+  const dayName = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Bangkok',
+    weekday: 'short',
+  }).format(date);
+
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const dayOfWeek = dayMap[dayName] ?? date.getDay();
+  const isWeekendOrHoliday = dayOfWeek === 0 || dayOfWeek === 6 || LIST_HOLIDAYS.includes(dateStr);
+
+  return { dateStr, timeStr, dayOfWeek, isWeekendOrHoliday };
+}
+
+function getCurrentAutoSlot(now = new Date()): AutoNotificationSlot | null {
+  const { timeStr, isWeekendOrHoliday } = getBangkokDateParts(now);
+
+  if (isWeekendOrHoliday) {
+    if (timeStr === '07:55') return 'weekend_0755';
+    return null;
+  }
+
+  if (timeStr === '15:55') return 'weekday_1555';
+  if (timeStr === '20:00') return 'weekday_2000';
+  return null;
+}
+
+function parseGoogleSheetCSV(csvText: string): DutyShift[] {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentVal = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentVal += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      currentRow.push(currentVal.trim());
+      currentVal = '';
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') i++;
+      currentRow.push(currentVal.trim());
+      if (currentRow.some(cell => cell.length > 0)) rows.push(currentRow);
+      currentRow = [];
+      currentVal = '';
+    } else {
+      currentVal += char;
+    }
+  }
+
+  if (currentVal || currentRow.length > 0) {
+    currentRow.push(currentVal.trim());
+    if (currentRow.some(cell => cell.length > 0)) rows.push(currentRow);
+  }
+
+  let headerRowIdx = -1;
+  const dayColMap: Record<number, number> = {};
+
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    let count = 0;
+    row.forEach((cell, cIdx) => {
+      const numMatch = cell.match(/^(\d{1,2})/);
+      if (numMatch) {
+        const day = parseInt(numMatch[1], 10);
+        if (day >= 1 && day <= 31) {
+          dayColMap[day] = cIdx;
+          count++;
+        }
+      }
+    });
+    if (count >= 15) {
+      headerRowIdx = r;
+      break;
+    }
+  }
+
+  const shifts: DutyShift[] = [];
+
+  if (headerRowIdx !== -1) {
+    for (let r = headerRowIdx + 1; r < rows.length; r++) {
+      const row = rows[r];
+      const name = (row[1] || '').trim();
+      const role = (row[2] || '').trim();
+      if (!name || name.includes('รวม') || name.includes('ผู้จัดเวร') || name.includes('ผู้ตรวจสอบ')) continue;
+
+      for (let d = 1; d <= 31; d++) {
+        const cIdx = dayColMap[d];
+        if (cIdx !== undefined && cIdx < row.length) {
+          const val = (row[cIdx] || '').trim();
+          if (val && val !== '-' && val !== '0') {
+            const isMorning = val.includes('เช้า') || val.includes('08:30');
+            const startTime = isMorning ? '08:30' : '16:00';
+            const endTime = isMorning ? '16:30' : '20:00';
+            const dateStr = `2026-10-${String(d).padStart(2, '0')}`;
+
+            shifts.push({
+              id: `server-${r}-${d}`,
+              date: dateStr,
+              staffName: name,
+              shiftType: isMorning ? 'morning' : 'afternoon',
+              shiftName: val,
+              startTime,
+              endTime,
+              department: 'กลุ่มงานเภสัชกรรม รพ.สบปราบ',
+              notes: `${role} • งานเอกสารและจ่ายยา OT`,
+              status: 'confirmed',
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return shifts;
+}
+
+async function fetchSheetShifts(): Promise<DutyShift[]> {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${DEFAULT_SHEET_ID}/export?format=csv`;
+  const response = await fetch(csvUrl);
+  if (!response.ok) {
+    throw new Error(`Unable to read Google Sheet CSV: HTTP ${response.status}`);
+  }
+
+  const csvText = await response.text();
+  return parseGoogleSheetCSV(csvText);
+}
+
+function buildSlotMessage(slot: AutoNotificationSlot, dateStr: string, shifts: DutyShift[]): string {
+  const list = shifts.map((shift, index) => `${index + 1}. ${shift.staffName} (${shift.shiftName})`).join('\n');
+  const titleMap = {
+    weekday_1555: '📢 แจ้งเตือนกะบ่าย (15:55 น.)',
+    weekday_2000: '📋 แจ้งเตือนปิดกะบ่ายและส่งมอบเวร (20:00 น.)',
+    weekend_0755: '🌅 แจ้งเตือนเวรเช้าวันหยุด (07:55 น.)',
+  };
+
+  const summaryMap = {
+    weekday_1555: 'อีก 5 นาทีจะเริ่มกะบ่าย 16:00 - 20:00 น. กรุณาเตรียมพร้อมและดำเนินงานตามเวรกำหนด',
+    weekday_2000: 'สิ้นสุดกะบ่าย 20:00 น. กรุณาสรุปยอดงานและส่งมอบเวรให้เรียบร้อย',
+    weekend_0755: 'เวรวันหยุดเช้า 08:30 - 16:30 น. กรุณาตรวจสอบเวรและเตรียมพร้อมก่อนเริ่มงาน',
+  };
+
+  return `${titleMap[slot]}\nวันที่: ${dateStr}\n\n${summaryMap[slot]}\n\nรายชื่อผู้ปฏิบัติงาน:\n${list || 'ไม่มีผู้ปฏิบัติงานในวันที่นี้'}`;
+}
+
+function getServerSentMap(): Record<string, number> {
+  const globalObj = globalThis as any;
+  if (!globalObj.__lineServerSentMap) {
+    globalObj.__lineServerSentMap = {};
+  }
+  return globalObj.__lineServerSentMap as Record<string, number>;
+}
+
+async function sendLinePushText(text: string) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
+  const target = process.env.LINE_GROUP_ID?.trim() || process.env.LINE_USER_ID?.trim();
+
+  if (!token) {
+    throw new Error('Missing LINE_CHANNEL_ACCESS_TOKEN in Vercel Environment Variables');
+  }
+  if (!target) {
+    throw new Error('Missing LINE_GROUP_ID or LINE_USER_ID in Vercel Environment Variables');
+  }
+
+  const response = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      to: target,
+      messages: [{ type: 'text', text }],
+    }),
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`LINE push failed: ${response.status} ${responseText}`);
+  }
+
+  return { ok: true, response: responseText };
+}
+
+export default async function handler(req: any, res: any) {
+  try {
+    if (req.method && req.method !== 'GET' && req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const now = new Date();
+    const { dateStr, timeStr, isWeekendOrHoliday } = getBangkokDateParts(now);
+    const slot = getCurrentAutoSlot(now);
+
+    if (!slot) {
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: 'No active slot at this time',
+        now: `${dateStr} ${timeStr}`,
+        weekendOrHoliday: isWeekendOrHoliday,
+      });
+    }
+
+    const sentMap = getServerSentMap();
+    const dedupeKey = `${dateStr}_${slot}`;
+    if (sentMap[dedupeKey]) {
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: 'Already sent this slot today',
+        slot,
+        dateStr,
+      });
+    }
+
+    const sheetShifts = await fetchSheetShifts();
+    const dayShifts = sheetShifts.filter(shift => shift.date === dateStr);
+
+    if (!dayShifts.length) {
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: 'No roster data for this date',
+        slot,
+        dateStr,
+      });
+    }
+
+    const message = buildSlotMessage(slot, dateStr, dayShifts);
+    await sendLinePushText(message);
+
+    sentMap[dedupeKey] = Date.now();
+
+    return res.status(200).json({
+      success: true,
+      sent: true,
+      slot,
+      dateStr,
+      recipients: dayShifts.length,
+      messagePreview: message.slice(0, 180),
+    });
+  } catch (error: any) {
+    console.error('SERVER-CRON-LINE-DISPATCH:ERR', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Auto LINE dispatch failed',
+    });
+  }
+}
